@@ -1,5 +1,79 @@
-import type { GameDoc } from "../../../shared/types";
+import type { GameDoc, Squad } from "../../../shared/types";
 import { WIDTH, HEIGHT } from "../../../shared/types";
+import { distance } from "../../../shared/math";
+
+function drawSquadOverlay(ctx: CanvasRenderingContext2D, d: GameDoc): void {
+  for (const squad of d.squads) {
+    if (squad.rewardIssued) continue;
+    const members = d.enemies.filter(
+      (e) => e.squadId === squad.id && e.hp > 0,
+    );
+    if (!members.length) continue;
+    // 围堵意图：从队伍锚点指向玩家周边的合围点。
+    ctx.strokeStyle = squad.color;
+    ctx.globalAlpha = 0.5;
+    ctx.setLineDash([4, 7]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(squad.hold.x, squad.hold.y, 12, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(squad.hold.x, squad.hold.y);
+    ctx.lineTo(d.player.x, d.player.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 成员关系：同队成员与存活成员连线，颜色即队伍标识。
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        if (distance(members[i], members[j]) > 90) continue;
+        ctx.beginPath();
+        ctx.moveTo(members[i].x, members[i].y);
+        ctx.lineTo(members[j].x, members[j].y);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawRoleMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  role: NonNullable<GameDoc["enemies"][number]["role"]>,
+  color: string,
+): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  if (role === "captain") {
+    // 队长：菱形徽记。
+    ctx.beginPath();
+    ctx.moveTo(x, y - 7);
+    ctx.lineTo(x + 5, y);
+    ctx.lineTo(x, y + 7);
+    ctx.lineTo(x - 5, y);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (role === "guard") {
+    // 护卫：盾形括弧。
+    ctx.beginPath();
+    ctx.arc(x, y, 8, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
+  } else {
+    // 射手：准星。
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 9, y);
+    ctx.lineTo(x - 6, y);
+    ctx.moveTo(x + 6, y);
+    ctx.lineTo(x + 9, y);
+    ctx.stroke();
+  }
+}
+
 export function renderScene(ctx: CanvasRenderingContext2D, d: GameDoc) {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   ctx.fillStyle = "#0a1019";
@@ -34,16 +108,34 @@ export function renderScene(ctx: CanvasRenderingContext2D, d: GameDoc) {
         ? "#9eeaa6"
         : drop.kind === "heal"
           ? "#fc91aa"
-          : "#8ac6ff";
+          : drop.kind === "supply"
+            ? "#5eead4"
+            : "#8ac6ff";
     ctx.shadowColor = ctx.fillStyle;
     ctx.shadowBlur = 10;
     ctx.save();
     ctx.translate(drop.x, drop.y);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillRect(-4, -4, 8, 8);
+    if (drop.kind === "supply") {
+      // 队伍补给：青色六边形，区别于普通菱形掉落。
+      ctx.rotate(d.time * 0.8);
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const px = Math.cos(a) * 7,
+          py = Math.sin(a) * 7;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-4, -4, 8, 8);
+    }
     ctx.restore();
   }
   ctx.shadowBlur = 0;
+  drawSquadOverlay(ctx, d);
   for (const e of d.enemies) {
     const color =
       e.kind === "shooter"
@@ -65,6 +157,22 @@ export function renderScene(ctx: CanvasRenderingContext2D, d: GameDoc) {
     }
     ctx.fill();
     ctx.shadowBlur = 0;
+    if (e.squadId !== undefined) {
+      const squad: Squad | undefined = d.squads.find(
+        (s) => s.id === e.squadId,
+      );
+      if (squad) {
+        // 队伍色外圈：在战场上标识成员归属。
+        ctx.strokeStyle = squad.color;
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        if (e.role) drawRoleMark(ctx, e.x, e.y - e.radius - 10, e.role, squad.color);
+      }
+    }
     ctx.fillStyle = "#10121d";
     ctx.beginPath();
     ctx.arc(e.x, e.y, 4, 0, Math.PI * 2);

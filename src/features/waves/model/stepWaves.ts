@@ -2,6 +2,8 @@ import type { GameDoc } from "../../../shared/types";
 import { distance, normalize } from "../../../shared/math";
 import { spawnEnemy } from "../lib/spawn";
 import { ENEMY_CATALOG, WAVE_DURATION, TOTAL_WAVES } from "./catalog";
+import { stepSquadSpawning, stepSquads } from "../lib/squads";
+
 export function stepWaves(doc: GameDoc, dt: number): void {
   if (doc.victory) return;
   if (doc.wave === 0) {
@@ -20,12 +22,18 @@ export function stepWaves(doc: GameDoc, dt: number): void {
     doc.wave++;
     doc.notice = `第 ${doc.wave} 波 · 威胁升级`;
   }
-  doc.spawnBudget += dt * (1.05 + doc.wave * 0.27);
+  // 协作队伍按波次整队生成，出生空间不足时整队延后进入。
+  stepSquadSpawning(doc, dt);
+  // 独立敌人继续按原节奏补充，维持战场压力。
+  doc.spawnBudget += dt * (0.62 + doc.wave * 0.16);
   while (doc.spawnBudget >= 1) {
     doc.spawnBudget--;
     if (doc.enemies.length < 180) doc.enemies.push(spawnEnemy(doc));
   }
+  // 队伍成员的队形、围堵与开火由独立模块统一决策。
+  stepSquads(doc, dt);
   for (const enemy of doc.enemies) {
+    if (enemy.squadId !== undefined) continue;
     const toward = normalize(doc.player.x - enemy.x, doc.player.y - enemy.y),
       range = distance(enemy, doc.player);
     const standOff =

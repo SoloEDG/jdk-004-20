@@ -8,13 +8,17 @@ export interface Player extends Vec {
   radius: number;
   invincible: number;
 }
+export type SquadRole = "guard" | "shooter" | "captain";
+export type EnemyKind = "chaser" | "shooter" | "elite";
 export interface Enemy extends Vec {
   id: number;
-  kind: "chaser" | "shooter" | "elite";
+  kind: EnemyKind;
   hp: number;
   maxHp: number;
   radius: number;
   cooldown: number;
+  squadId?: number;
+  role?: SquadRole;
 }
 export interface Bullet extends Vec {
   id: number;
@@ -30,9 +34,30 @@ export interface Bullet extends Vec {
 }
 export interface Drop extends Vec {
   id: number;
-  kind: "xp" | "heal" | "magnet";
+  kind: "xp" | "heal" | "magnet" | "supply";
   value: number;
   life: number;
+  squadSupply?: boolean;
+}
+export interface SquadMemberSpec {
+  role: SquadRole;
+  kind: EnemyKind;
+  hp: number;
+  radius: number;
+  offset: Vec;
+}
+export interface PendingSquad {
+  id: number;
+  edge: number;
+  members: SquadMemberSpec[];
+}
+export interface Squad {
+  id: number;
+  color: string;
+  edge: number;
+  colorIndex: number;
+  hold: Vec;
+  rewardIssued: boolean;
 }
 export interface Weapon {
   id: WeaponId;
@@ -75,6 +100,9 @@ export interface GameDoc {
   enemies: Enemy[];
   bullets: Bullet[];
   drops: Drop[];
+  squads: Squad[];
+  pendingSquads: PendingSquad[];
+  squadBudget: number;
   weapons: Weapon[];
   upgrades: Record<string, number>;
   choices: string[];
@@ -106,6 +134,7 @@ export interface FrameEvents {
   taken: number;
   shots: number;
   collected: number;
+  squadSupplies: number;
 }
 export const WIDTH = 1000;
 export const HEIGHT = 650;

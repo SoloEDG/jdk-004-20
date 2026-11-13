@@ -597,6 +597,9 @@ kbd {
 .drop-legend i:nth-of-type(3) {
   background: #8ac6ff;
 }
+.drop-legend i:nth-of-type(4) {
+  background: #5eead4;
+}
 footer {
   border-top: 1px solid #1d2730;
   margin-top: 28px;

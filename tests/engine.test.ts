@@ -14,6 +14,7 @@ const events = (): FrameEvents => ({
   taken: 0,
   shots: 0,
   collected: 0,
+  squadSupplies: 0,
 });
 const enemy = (id = 1) => ({
   id,

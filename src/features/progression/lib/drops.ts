@@ -1,14 +1,25 @@
 import type { GameDoc, FrameEvents } from "../../../shared/types";
 import { random, distance, normalize } from "../../../shared/math";
 import { grantExperience } from "./experience";
+import { ROLE_XP, SUPPLY_XP } from "../../waves/lib/squads";
+
 export function generateDrops(doc: GameDoc, events: FrameEvents): void {
   for (const { enemy } of events.kills) {
+    // 队伍普通成员仍按职责掉落各自的经验晶体，整队奖励另行通过补给发放。
+    const value =
+      enemy.role !== undefined
+        ? ROLE_XP[enemy.role]
+        : enemy.kind === "elite"
+          ? 10
+          : enemy.kind === "shooter"
+            ? 3
+            : 2;
     doc.drops.push({
       id: doc.nextId++,
       x: enemy.x,
       y: enemy.y,
       kind: "xp",
-      value: enemy.kind === "elite" ? 10 : enemy.kind === "shooter" ? 3 : 2,
+      value,
       life: 45,
     });
     const roll = random(doc);
@@ -55,6 +66,14 @@ export function collectDrops(
     if (drop.kind === "xp") grantExperience(doc, drop.value);
     if (drop.kind === "heal")
       doc.player.hp = Math.min(doc.player.maxHp, doc.player.hp + drop.value);
+    if (drop.kind === "supply") {
+      // 整队清除的额外队伍补给：修复机体并额外奖励经验。
+      doc.player.hp = Math.min(
+        doc.player.maxHp,
+        doc.player.hp + drop.value,
+      );
+      grantExperience(doc, SUPPLY_XP);
+    }
     if (drop.kind === "magnet") magnet = true;
   }
   if (magnet) {

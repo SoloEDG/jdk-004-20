@@ -1,8 +1,9 @@
-import type { GameDoc, Input, FrameEvents } from "../../../shared/types";
+import type { GameDoc, Input, FrameEvents, Enemy } from "../../../shared/types";
 import { WIDTH, HEIGHT } from "../../../shared/types";
 import { clamp, distance, normalize } from "../../../shared/math";
 import { segmentDistance } from "../lib/collision";
 import { hurtPlayer } from "./health";
+import { interceptTarget, finalizeSquads } from "../../waves/lib/squads";
 export function stepCombat(
   doc: GameDoc,
   input: Input,
@@ -15,6 +16,7 @@ export function stepCombat(
     shots: 0,
     collected: 0,
     weaponDamage: {},
+    squadSupplies: 0,
   };
   const player = doc.player;
   player.invincible = Math.max(0, player.invincible - dt);
@@ -53,16 +55,19 @@ export function stepCombat(
         enemy.radius + bullet.radius
       )
         continue;
-      bullet.hit.push(enemy.id);
-      const damage = Math.min(enemy.hp, bullet.damage);
-      enemy.hp -= damage;
+      // 护卫挡弹：命中同队后排时改由附近存活护卫承伤，成员各自独立扣血。
+      const target: Enemy = interceptTarget(doc, enemy);
+      if (target !== enemy && bullet.hit.includes(target.id)) continue;
+      bullet.hit.push(target.id);
+      const damage = Math.min(target.hp, bullet.damage);
+      target.hp -= damage;
       events.damage += damage;
       if (bullet.weapon !== "enemy")
         events.weaponDamage![bullet.weapon] =
           (events.weaponDamage![bullet.weapon] || 0) + damage;
-      if (enemy.hp <= 0)
+      if (target.hp <= 0)
         events.kills.push({
-          enemy: { ...enemy },
+          enemy: { ...target },
           weapon: bullet.weapon === "enemy" ? "pulse" : bullet.weapon,
         });
       if (bullet.pierce <= 0) {
@@ -77,6 +82,8 @@ export function stepCombat(
       events.taken += hurtPlayer(doc, enemy.kind === "elite" ? 25 : 12);
   }
   doc.enemies = doc.enemies.filter((e) => e.hp > 0);
+  // 队长阵亡在同一帧重分配职责；整队清除时仅发放一次队伍补给。
+  finalizeSquads(doc, events);
   doc.bullets = doc.bullets.filter(
     (b) =>
       b.life >= 0 &&
